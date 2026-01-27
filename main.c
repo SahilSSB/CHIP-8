@@ -85,3 +85,85 @@ bool load_rom(chip8 *chip, const char *filename) {
     fclose(file);
     return true;
 }
+
+int main(int argc, char **argv) {
+    if (argc != 2) { //ARGUMENT CHECK
+        printf("USAGE: ./chip8 <rom_file>\n");
+        return 1;
+    }
+
+    // INITIALIZE CHIP-8
+    chip8 chip;
+    init_chip8(&chip);
+    if (!load_rom(&chip, argv[1])) return 1;
+
+    // INITIALIZE SDL
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        printf("SDL could not initialize. SDL_Error: %s\n", SDL_GetError());
+        return 1;
+    }
+
+    int w = 64;
+    int h = 32;
+    int scale = 15; // FOR SCALING THE WINDOW
+
+    SDL_Window *window = SDL_CreateWindow("CHIP-8 EMULATOR",
+                                        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                        w * scale, h * scale,
+                                        SDL_WINDOW_SHOWN);
+    
+    if (!window) {
+        printf("Window could not be created. SDL_Error: %s\n", SDL_GetError());
+        return 1;
+    }
+
+    // CREATE A RENDERER
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    if (!renderer) {
+        printf("Renderer could not be created. SDL_Error: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    SDL_Texture *texture = SDL_CreateTexture(renderer,
+                                                SDL_PIXELFORMAT_RGBA8888,
+                                                SDL_TEXTUREACCESS_STREAMING,
+                                                w, h);
+    // MAIN LOOP
+    bool quit = false;
+    SDL_Event event;
+    uint32_t pixels[64 * 32]; // TEMPORARY BUFFER FOR SDL COLORS
+
+    while (!quit) {
+        while (SDL_PollEvent(&event)) { // EVENT HANDLING FOR KEYBOARD, WINDOW, CLOSE
+            if (event.type == SDL_QUIT) {
+                quit = true;
+            }
+        }
+
+        // CONVERT CHIP - 8 ONE BIT PIXELS TO SDL 32 BIT COLORS
+        for (int i = 0; i < 64 * 32; i++) {
+            uint8_t pixel = chip.gfx[i];
+            
+            // IF PIXEL IS 1 THEN WHITE, IF PIXEL IS 0 THEN BLACK
+            pixels[i] = (pixel ? 0xFFFFFFFF : 0x000000FF);
+        }
+
+        // UPDATE TEXTURE AND RENDER
+        SDL_UpdateTexture(texture, NULL, pixels, 64 * sizeof(uint32_t));
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_RenderPresent(renderer);
+
+        // SMALL DELAY TO PREVENT RUNNING AT 100% CPU
+        SDL_Delay(1);
+    }
+
+    // CLEANUP
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}
